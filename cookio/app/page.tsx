@@ -161,8 +161,7 @@ export default async function Home() {
 }
 
 async function fetchPopularRecipes(): Promise<{ recipes: RecipeSummary[]; error: string | null }> {
-  const baseUrl = getBaseUrl()
-  const url = `${baseUrl}/api/fetch-recipes?limit=${POPULAR_RECIPES_LIMIT}&page=1`
+  const url = `/api/fetch-recipes?limit=${POPULAR_RECIPES_LIMIT}&page=1`
 
   try {
     const response = await fetch(url, {
@@ -293,9 +292,5 @@ const ensureDateString = (value: unknown, fallback: string): string => {
   return fallback
 }
 
-const getBaseUrl = () => {
-  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL
-  if (process.env.NEXTAUTH_URL) return process.env.NEXTAUTH_URL
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
-  return "http://localhost:3000"
-}
+// Use relative URL so Next can resolve API internally during SSR/ISR and build
+// Avoid absolute domain that can cause auth/middleware issues on deploy
