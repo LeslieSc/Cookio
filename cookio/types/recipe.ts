@@ -31,7 +31,7 @@ export interface Recipe {
 }
 
 export interface Ingredient {
-  id: string
+  id?: string
   name: string
   amount: number
   unit: string
@@ -45,4 +45,29 @@ export interface RecipeFilters {
   difficulty?: string
   page?: number
   limit?: number
+}
+
+export type RecipeSummary = Pick<
+  Recipe,
+  | "id"
+  | "slug"
+  | "title"
+  | "description"
+  | "imageUrl"
+  | "categories"
+  | "difficulty"
+  | "prepTime"
+  | "cookTime"
+  | "totalTime"
+  | "servings"
+  | "nutrition"
+  | "ingredients"
+  | "instructions"
+  | "likes"
+  | "isLiked"
+  | "isSaved"
+  | "createdAt"
+  | "updatedAt"
+> & {
+  _id?: string
 }

@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation"
-import { getServerSession } from "next-auth"
-import { RecipeForm } from "@/components/recipe-form"
+import { auth } from "@/auth"
+import { RecipeForm } from "@/app/components/recipe-form"
 
 export default async function CreateRecipePage() {
-  const session = await getServerSession()
+  const session = await auth()
 
   if (!session) {
     redirect("/login")

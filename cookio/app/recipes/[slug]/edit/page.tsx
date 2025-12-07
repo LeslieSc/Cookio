@@ -1,14 +1,14 @@
 import { redirect, notFound } from "next/navigation"
-import { getServerSession } from "next-auth"
+import { auth } from "@/auth"
 import { mockRecipes } from "@/lib/mock-data"
-import { RecipeForm } from "@/components/recipe-form"
+import { RecipeForm } from "@/app/components/recipe-form"
 
 interface EditRecipePageProps {
   params: Promise<{ slug: string }>
 }
 
 export default async function EditRecipePage({ params }: EditRecipePageProps) {
-  const session = await getServerSession()
+  const session = await auth()
   const { slug } = await params
 
   if (!session) {

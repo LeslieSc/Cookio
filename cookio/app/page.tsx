@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { ArrowRight, ChefHat, Clock, Sparkles, Users } from "lucide-react"
-import { RecipeGrid } from "@/components/recipe-grid"
+import { RecipeGrid } from "./components/recipe-grid"
 import { mockRecipes } from "@/lib/mock-data"
 
 export default function Home() {

@@ -4,9 +4,9 @@ import { notFound } from "next/navigation"
 import { Clock, Users, ChefHat, Calendar, ArrowLeft } from "lucide-react"
 import { mockRecipes } from "@/lib/mock-data"
 import { formatDate, formatTime } from "@/lib/utils"
-import { IngredientList } from "@/components/ingredient-list"
-import { NutritionSummary } from "@/components/nutrition-summary"
-import { RecipeActions } from "@/components/recipe-actions"
+import { IngredientList } from "@/app/components/ingredient-list"
+import { NutritionSummary } from "@/app/components/nutrition-summary"
+import { RecipeActions } from "@/app/components/recipe-actions"
 
 interface RecipePageProps {
   params: Promise<{ slug: string }>
