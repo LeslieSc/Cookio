@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { headers } from "next/headers"
 import { ArrowRight, ChefHat, Clock, Sparkles, Users } from "lucide-react"
 import { RecipeGrid } from "./components/recipe-grid"
 import type { RecipeSummary } from "@/types/recipe"
@@ -161,7 +162,8 @@ export default async function Home() {
 }
 
 async function fetchPopularRecipes(): Promise<{ recipes: RecipeSummary[]; error: string | null }> {
-  const url = `/api/fetch-recipes?limit=${POPULAR_RECIPES_LIMIT}&page=1`
+  const baseUrl = getBaseUrl()
+  const url = `${baseUrl}/api/fetch-recipes?limit=${POPULAR_RECIPES_LIMIT}&page=1`
 
   try {
     const response = await fetch(url, {
@@ -292,5 +294,33 @@ const ensureDateString = (value: unknown, fallback: string): string => {
   return fallback
 }
 
-// Use relative URL so Next can resolve API internally during SSR/ISR and build
-// Avoid absolute domain that can cause auth/middleware issues on deploy
+function getBaseUrl() {
+  // Try to derive from the current request (works in SSR)
+  try {
+    const h = headers()
+    // headers() returns a Promise in RSC; await it safely
+    // eslint-disable-next-line @typescript-eslint/await-thenable
+    const hdrs = (h as unknown as Promise<Readonly<Map<string, string>>>)
+    // Attempt to read synchronously if not a promise
+    // Fallback to envs below if unavailable
+    // @ts-ignore
+    const resolved = typeof hdrs?.then === "function" ? undefined : (h as unknown as ReadonlyHeaders)
+    // @ts-ignore
+    const proto = resolved?.get?.("x-forwarded-proto") ?? "https"
+    // @ts-ignore
+    const host = resolved?.get?.("host")
+    if (host) return `${proto}://${host}`
+  } catch {
+    // headers() may throw during static build
+  }
+
+  // Prefer explicit app URL when set
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL
+  // Auth/NextAuth configured domain
+  if (process.env.AUTH_URL) return process.env.AUTH_URL
+  if (process.env.NEXTAUTH_URL) return process.env.NEXTAUTH_URL
+  // Vercel provides the deployment host
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+  // Local fallback
+  return "http://localhost:3000"
+}
