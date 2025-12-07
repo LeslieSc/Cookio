@@ -2,19 +2,22 @@ import Image from "next/image"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Clock, Users, ChefHat, Calendar, ArrowLeft } from "lucide-react"
-import { mockRecipes } from "@/lib/mock-data"
+import type { Recipe } from "@/types/recipe"
 import { formatDate, formatTime } from "@/lib/utils"
 import { IngredientList } from "@/app/components/ingredient-list"
 import { NutritionSummary } from "@/app/components/nutrition-summary"
 import { RecipeActions } from "@/app/components/recipe-actions"
 
+const FALLBACK_IMAGE = "/placeholder.svg?height=600&width=1000&query=delicious food"
+const DEFAULT_AUTHOR = { id: "cookio-chef", name: "Cookio Chef" }
+const FETCH_ERROR_MESSAGE = "Unable to load this recipe right now."
+
 interface RecipePageProps {
-  params: Promise<{ slug: string }>
+  params: { slug: string }
 }
 
 export default async function RecipePage({ params }: RecipePageProps) {
-  const { slug } = await params
-  const recipe = mockRecipes.find((r) => r.slug === slug)
+  const recipe = await fetchRecipe(params.slug)
 
   if (!recipe) {
     notFound()
@@ -37,7 +40,7 @@ export default async function RecipePage({ params }: RecipePageProps) {
           {/* Hero Image */}
           <div className="relative aspect-video overflow-hidden rounded-2xl">
             <Image
-              src={recipe.imageUrl || "/placeholder.svg?height=600&width=1000&query=delicious food"}
+              src={recipe.imageUrl || FALLBACK_IMAGE}
               alt={recipe.title}
               fill
               className="object-cover"
@@ -79,7 +82,7 @@ export default async function RecipePage({ params }: RecipePageProps) {
                   <ChefHat className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium">{recipe.author.name}</p>
+                  <p className="text-sm font-medium">{recipe.author?.name ?? DEFAULT_AUTHOR.name}</p>
                   <p className="text-xs text-muted-foreground">Recipe creator</p>
                 </div>
               </div>
@@ -138,4 +141,137 @@ export default async function RecipePage({ params }: RecipePageProps) {
       </div>
     </div>
   )
+}
+
+async function fetchRecipe(slug: string): Promise<Recipe | null> {
+  const baseUrl = getBaseUrl()
+  const url = `${baseUrl}/api/recipes/${slug}`
+
+  try {
+    const response = await fetch(url, { cache: "no-store" })
+
+    if (response.status === 404) {
+      return null
+    }
+
+    if (!response.ok) {
+      throw new Error(`Recipe request failed with status ${response.status}`)
+    }
+
+    const payload = (await response.json()) as { data?: unknown }
+    if (!payload.data) {
+      return null
+    }
+
+    return normalizeRecipe(payload.data as Record<string, unknown>)
+  } catch (error) {
+    console.error(FETCH_ERROR_MESSAGE, error)
+    return null
+  }
+}
+
+const normalizeRecipe = (recipe: Record<string, unknown>): Recipe => {
+  const fallbackSlug = getString(recipe["slug"]) ?? getString(recipe["_id"]) ?? "recipe"
+  const createdAt = ensureDateString(recipe["createdAt"], new Date().toISOString())
+  const updatedAt = ensureDateString(recipe["updatedAt"], createdAt)
+
+  const categories = Array.isArray(recipe["categories"])
+    ? (recipe["categories"] as unknown[]).filter(
+        (category): category is string => typeof category === "string" && category.length > 0,
+      )
+    : []
+
+  const ingredients = Array.isArray(recipe["ingredients"])
+    ? (recipe["ingredients"] as unknown[]).map((ingredient, index) => {
+        const entry = ingredient as Record<string, unknown>
+        return {
+          id: getString(entry["id"]) ?? `${fallbackSlug}-ingredient-${index}`,
+          name: getString(entry["name"]) ?? "",
+          amount: getNumber(entry["amount"]),
+          unit: getString(entry["unit"]) ?? "",
+        }
+      })
+    : []
+
+  const instructions = Array.isArray(recipe["instructions"])
+    ? (recipe["instructions"] as unknown[]).filter(
+        (step): step is string => typeof step === "string" && step.trim().length > 0,
+      )
+    : []
+
+  const nutritionSource = (recipe["nutrition"] as Record<string, unknown>) || {}
+  const prepTime = getNumber(recipe["prepTime"])
+  const cookTime = getNumber(recipe["cookTime"])
+  const totalTime = getNumber(recipe["totalTime"], prepTime + cookTime)
+
+  const rawDifficulty = getString(recipe["difficulty"])?.toLowerCase()
+  const difficulty = rawDifficulty && ["easy", "medium", "hard"].includes(rawDifficulty) ? rawDifficulty : "medium"
+
+  const authorSource = recipe["author"] as Record<string, unknown> | undefined
+  const authorId = getString(recipe["userId"]) ?? getString(authorSource?.id) ?? DEFAULT_AUTHOR.id
+  const authorName = getString(authorSource?.name) ?? DEFAULT_AUTHOR.name
+  const authorAvatar = getString(authorSource?.avatarUrl)
+
+  return {
+    id: fallbackSlug,
+    slug: fallbackSlug,
+    title: getString(recipe["title"]) ?? "Untitled recipe",
+    description: getString(recipe["description"]) ?? "",
+    imageUrl: getString(recipe["imageUrl"]) || FALLBACK_IMAGE,
+    categories,
+    difficulty: difficulty as Recipe["difficulty"],
+    prepTime,
+    cookTime,
+    totalTime,
+    servings: Math.max(getNumber(recipe["servings"], 1), 1),
+    nutrition: {
+      calories: getNumber(nutritionSource["calories"]),
+      protein: getNumber(nutritionSource["protein"]),
+      carbs: getNumber(nutritionSource["carbs"]),
+      fat: getNumber(nutritionSource["fat"]),
+    },
+    ingredients,
+    instructions,
+    author: {
+      id: authorId,
+      name: authorName,
+      avatarUrl: authorAvatar,
+    },
+    likes: Math.max(getNumber(recipe["likes"]), 0),
+    isLiked: Boolean(recipe["isLiked"]),
+    isSaved: Boolean(recipe["isSaved"]),
+    createdAt,
+    updatedAt,
+  }
+}
+
+const getString = (value: unknown): string | undefined => {
+  if (typeof value === "string") return value
+  if (typeof value === "number" && Number.isFinite(value)) return value.toString()
+  if (typeof value === "object" && value !== null && "toString" in value) {
+    const converted = (value as { toString: () => string }).toString()
+    if (typeof converted === "string" && converted !== "[object Object]") {
+      return converted
+    }
+  }
+  return undefined
+}
+
+const getNumber = (value: unknown, defaultValue = 0): number => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : defaultValue
+}
+
+const ensureDateString = (value: unknown, fallback: string): string => {
+  if (value instanceof Date) return value.toISOString()
+  if (typeof value === "string" && value.length > 0) return value
+  if (typeof value === "number" && Number.isFinite(value)) return new Date(value).toISOString()
+  return fallback
+}
+
+const getBaseUrl = () => {
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL
+  if (process.env.NEXTAUTH_URL) return process.env.NEXTAUTH_URL
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+  return "http://localhost:3000"
 }
